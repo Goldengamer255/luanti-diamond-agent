@@ -167,6 +167,47 @@ carries the handful needed to get from bare hands to an iron pickaxe; for
 anything else pass the grid shape to `craft()` yourself, or put candidate items
 in the grid and read `craftpreview` to discover what they make.
 
+### Tools, digging and combat
+
+```python
+bot.dig_time_for(pos, "mcl_tools:pick_iron")   # seconds, or None if it cannot
+bot.best_tool_for(pos)                         # (slot, seconds); slot None = hand
+bot.can_dig(pos)
+bot.equip(slot)                                # moves the item into the hotbar
+
+bot.hostiles(radius=16)                        # nearby hostile mobs
+bot.best_weapon()                              # (slot, damage)
+bot.attack(entity)                             # one punch
+bot.fight(entity, timeout=30)                  # chase and kill
+bot.defend(radius=8)                           # clear hostiles around the bot
+```
+
+`dig()` now chooses the fastest tool it is carrying and waits the exact time the
+server expects before sending the completion, instead of retrying blindly. Dig
+times come from `TOCLIENT_ITEMDEF`, which carries every tool's capabilities:
+
+```
+mcl_core:stone           hand=7.50  pick_wood=1.15  pick_stone=0.60  pick_iron=0.40
+mcl_core:stone_with_diamond        pick_wood=7.50  pick_stone=3.75  pick_iron=0.75
+```
+
+Two things to know. The hand's capabilities come from the player's `hand`
+inventory list in games like MineClone2, not the global empty-name item. And an
+item outside the **hotbar** cannot be used at all -- the server drops any
+interact whose item index is past `hotbar_itemcount` -- so `equip()` moves a
+tool into the hotbar before selecting it.
+
+### Mining
+
+```python
+bot.mine_to_depth(-55)        # cut a staircase down, fighting and avoiding lava
+```
+
+Each step opens a two-node gap (feet and head) ahead and below, then walks into
+it, so the bot never stands on the block it is breaking. It refuses to open a
+face next to lava, turns a corner when blocked, and stops if its health falls
+below `min_hp`.
+
 ### Containers and smelting
 
 ```python
@@ -220,6 +261,7 @@ Drive the bot with `bot.step()`, `bot.wait(seconds)`,
 | `examples/07_find_ore.py` | descend through caves scanning for an ore |
 | `examples/08_bootstrap.py` | bare hands -> logs -> planks -> table -> pickaxe -> mine stone |
 | `examples/09_furnace.py` | read nearby container contents, then smelt ore |
+| `examples/10_diamonds.py` | mine down to the diamond layer and bring some back |
 
 ## How it is put together
 
@@ -233,6 +275,8 @@ Drive the bot with `bot.step()`, `bot.wait(seconds)`,
 | `mapblock.py` / `world.py` | block decoding and the map model |
 | `entities.py` | players, mobs and item drops |
 | `inventory.py` | the text inventory format, merged incrementally |
+| `itemdef.py` | item registry, tool capabilities and dig-time computation |
+| `mcp_server.py` | an MCP stdio server exposing the bot as tools |
 | `recipes.py` | the bootstrap recipe book (recipes are never sent to clients) |
 | `pathfinder.py` | A* over standable positions |
 | `bot.py` | the high-level API |
@@ -255,6 +299,37 @@ empirically rather than from documentation:
 * **The legacy password hash** was checked against Luanti's own
   `core.get_password_hash` output — it is unpadded base64, 27 characters.
 
+## Using it from an MCP client
+
+`luantibot.mcp_server` speaks MCP over stdio, so the bot can be driven from
+opencode or any other MCP client. It needs nothing outside the standard library.
+
+```json
+{
+  "mcp": {
+    "luantibot": {
+      "type": "local",
+      "command": ["python3", "-m", "luantibot.mcp_server"],
+      "environment": {
+        "PYTHONPATH": "/path/to/luanti-mod",
+        "LUANTI_HOST": "play.example.com",
+        "LUANTI_PORT": "30000",
+        "LUANTI_USER": "yourname",
+        "LUANTI_PASSWORD": "yourpassword"
+      }
+    }
+  }
+}
+```
+
+Tools: `connect`, `disconnect`, `status`, `inventory`, `goto`, `dig`, `place`,
+`chat`, `find_blocks`, `node_at`, `craft`, `smelt`, `mine_to_depth`, `defend`,
+`entities`. With the environment set, `connect` can be called with no arguments.
+
+The bot is blocking and has to be pumped continuously to stay connected, so it
+runs on a worker thread: tool calls are queued onto it, and between calls that
+thread keeps stepping the bot.
+
 ## Limitations
 
 * Digging time is not computed from tool capabilities; `dig()` asks the server
@@ -266,13 +341,10 @@ empirically rather than from documentation:
   node inventories via `nodemeta:x,y,z`), and container *contents* are readable
   from node metadata, but the bot cannot read a formspec's layout -- so it must
   be told which lists a station uses.
-* `TOCLIENT_ITEMDEF` is received but not parsed, so the bot has no tool
-  capabilities: it cannot compute dig times (`dig()` retries until the server
-  accepts), pick the best tool for a node, or know which tool tier a node needs.
-* There is no combat: `interact(object_id=...)` exists, but nothing targets,
-  attacks, or flees. Hostile mobs are a real hazard underground.
-* No systematic mining (staircase or strip). Reaching deep ore currently depends
-  on finding natural caves.
+* Combat is melee only, and mobs that resist damage or attack at range (a
+  MineClone2 witch, say) will win. There is no fleeing.
+* `mine_to_depth` cuts a staircase but does not shore up water, bridge gaps, or
+  come back with what it mined; it stops rather than solving those.
 * The bot never sends `TOSERVER_DAMAGE`, so it takes no fall damage. That is
   effectively cheating, and a server running strict anticheat may object.
 * No automatic reconnection, and the API is blocking and single-threaded.
