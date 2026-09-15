@@ -197,20 +197,33 @@ class Bot:
             time.sleep(PHYSICS_DT)
 
     def _apply_gravity(self, dt):
-        """Fall if unsupported, so the bot's claimed position stays plausible."""
+        """Fall if unsupported, so the bot's claimed position stays plausible.
+
+        The landing height must be derived from the ground being fallen towards,
+        not from the node the bot currently occupies -- clamping to the latter
+        pins the bot in mid-air, because that height is where it already is.
+        """
         p = self.node_pos
-        below = (p[0], p[1] - 1, p[2])
-        d = self.world.get_def(below)
         here = self.world.get_def(p)
         if here is not None and (here.climbable or here.is_liquid):
             return
-        if d is None or d.walkable:
+
+        below = self.world.get_def((p[0], p[1] - 1, p[2]))
+        if below is None:
+            return                            # ground unknown: do not guess
+        if below.walkable:
+            surface = p[1] - 0.5              # resting on it
+            if self.client.position[1] < surface:
+                self.client.position[1] = surface
             return
-        # unsupported: sink toward the ground
-        self.client.position[1] -= FALL_SPEED * dt
-        floor_y = p[1] - 0.5
-        if self.client.position[1] < floor_y:
-            self.client.position[1] = floor_y
+
+        # nothing underfoot: fall, stopping on the first solid surface reached
+        new_y = self.client.position[1] - FALL_SPEED * dt
+        node_y = math.floor(new_y + 0.5)
+        ground = self.world.get_def((p[0], node_y - 1, p[2]))
+        if ground is not None and ground.walkable:
+            new_y = max(new_y, node_y - 0.5)
+        self.client.position[1] = new_y
 
     # ------------------------------------------------------------- movement
 
@@ -668,6 +681,24 @@ class Bot:
                 return False
         return True
 
+    def settle(self, timeout=20.0):
+        """Wait until the map is known underfoot and the bot has landed.
+
+        Returns True once there is solid ground below, False on timeout.
+        """
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            p = self.node_pos
+            below = self.world.get_def((p[0], p[1] - 1, p[2]))
+            here = self.world.get_def(p)
+            if below is not None and below.walkable:
+                return True
+            if here is not None and (here.climbable or here.is_liquid):
+                return True
+            self.step()                       # applies gravity and pumps packets
+            time.sleep(PHYSICS_DT)
+        return False
+
     def _dig_down_one(self, p):
         """Drop one level by digging the block underfoot.
 
@@ -715,6 +746,11 @@ class Bot:
                 if self.hp <= min_hp:
                     self.emit("mining_aborted", "hp too low")
                     return False
+
+            # Mining refuses to cut blind, so make sure the map has arrived and
+            # that we are actually standing on something -- after a teleport the
+            # bot is typically still in mid-air above unstreamed ground.
+            self.settle(timeout=20.0)
 
             if self.dead:
                 # Respawning teleports us; anything computed from the old
