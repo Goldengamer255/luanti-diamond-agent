@@ -343,8 +343,10 @@ thread keeps stepping the bot.
   be told which lists a station uses.
 * Combat is melee only, and mobs that resist damage or attack at range (a
   MineClone2 witch, say) will win. There is no fleeing.
-* `mine_to_depth` cuts a staircase but does not shore up water, bridge gaps, or
-  come back with what it mined; it stops rather than solving those.
+* `mine_to_depth` refuses to cut into any liquid, so it turns away from water
+  and lava rather than flooding or burning its shaft -- but if it is already
+  standing in a flooded or dead-ended shaft it will stop rather than dig itself
+  out. It also does not bridge gaps or carry its haul home.
 * The bot never sends `TOSERVER_DAMAGE`, so it takes no fall damage. That is
   effectively cheating, and a server running strict anticheat may object.
 * No automatic reconnection, and the API is blocking and single-threaded.

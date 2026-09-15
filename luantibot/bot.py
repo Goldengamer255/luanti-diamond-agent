@@ -651,16 +651,20 @@ class Bot:
     HEADINGS = ((1, 0), (0, 1), (-1, 0), (0, -1))
 
     def _opening_is_safe(self, node):
-        """Refuse to breach into lava, or into anything that damages us."""
-        d = self.world.get_def(node)
-        if d is not None and (d.damage_per_second > 0
-                              or (d.is_liquid and "lava" in d.name)):
+        """Refuse to breach into a liquid or anything that damages us.
+
+        Lava is obviously fatal, but water is nearly as bad for a mine: it
+        floods the shaft behind you and makes movement unreliable, so any
+        liquid next to the face being cut is treated as a reason to dig
+        elsewhere.
+        """
+        def hazardous(d):
+            return d is not None and (d.damage_per_second > 0 or d.is_liquid)
+
+        if hazardous(self.world.get_def(node)):
             return False
         for dx, dy, dz in ((1,0,0), (-1,0,0), (0,1,0), (0,-1,0), (0,0,1), (0,0,-1)):
-            n = self.world.get_def((node[0]+dx, node[1]+dy, node[2]+dz))
-            if n is None:
-                continue
-            if n.damage_per_second > 0 or (n.is_liquid and "lava" in n.name):
+            if hazardous(self.world.get_def((node[0]+dx, node[1]+dy, node[2]+dz))):
                 return False
         return True
 
