@@ -1,5 +1,9 @@
 # Luanti diamond agent
 
+[![Watch the agent mine a diamond on YouTube](docs/thumbnail.jpg)](https://youtu.be/Qc8IV6dI2cU)
+
+**[Watch the full run on YouTube](https://youtu.be/Qc8IV6dI2cU)**
+
 An LLM agent that plays Luanti (VoxeLibre) from an empty inventory to a
 diamond. Its best run took **3 min 29 s and a single LLM call**, rank 23 on
 the class speedrun leaderboard.
