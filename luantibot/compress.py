@@ -15,7 +15,9 @@ _lib = None
 def _zstd():
     global _lib
     if _lib is None:
-        path = ctypes.util.find_library("zstd") or "libzstd.so.1"
+        # Windows names the DLL libzstd.dll (Git for Windows ships one)
+        path = (ctypes.util.find_library("zstd")
+                or ctypes.util.find_library("libzstd") or "libzstd.so.1")
         _lib = ctypes.CDLL(path)
         _lib.ZSTD_createDStream.restype = ctypes.c_void_p
         _lib.ZSTD_freeDStream.argtypes = [ctypes.c_void_p]

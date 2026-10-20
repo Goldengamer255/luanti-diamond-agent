@@ -67,6 +67,9 @@ def is_hostile(entity, keywords=HOSTILE_KEYWORDS) -> bool:
     if entity.is_player or not entity.name:
         return False
     name = entity.name.lower()
+    # VoxeLibre attaches a glowing-eyes entity to spiders; it cannot be hurt
+    if name.endswith("_eyes"):
+        return False
     return any(k in name for k in keywords)
 
 

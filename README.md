@@ -1,3 +1,44 @@
+# Luanti diamond agent
+
+An LLM agent that plays Luanti (VoxeLibre) from an empty inventory to a
+diamond. Its best run took **3 min 29 s and a single LLM call**, rank 23 on
+the class speedrun leaderboard.
+
+Built for SE325 (Agentic AI for Software Engineering) at the University of
+Auckland. The full write-up is in [`report/`](report/).
+
+## How it works
+
+[`agent.py`](agent.py) is the harness. Each turn it sends MiniMax-M3 (any
+OpenAI-compatible model works) a ~15-line text observation: position, health,
+inventory, and the nearest ore visible through the streamed map. The model
+answers with tool calls, which the harness runs on the bot:
+
+- **Macros** do a whole stage of the tech tree in one call:
+  `make_wood_pickaxe`, `make_stone_pickaxe`, `make_iron_pickaxe`, `get_diamond`.
+- **Mid-level and fine tools** (`dig_to`, `gather`, `craft`, `smelt`, `goto`, ...)
+  are there for recovering when a macro fails.
+- **Memory** is a block rewritten in place each turn (recent actions plus the
+  model's own notes) rather than a growing transcript, so every call costs
+  ~2-3k tokens.
+- **A reflex** fights nearby mobs while the model is thinking.
+
+```bash
+cp .env.example .env    # fill in the server and LLM details
+python agent.py
+```
+
+## Credits
+
+The `luantibot` library below, a headless Python client for the Luanti
+network protocol, is the course starter code by
+[Elliott Wen](https://github.com/elliott-wen/luanti-bot). On top of it I
+wrote `agent.py`, fixed Windows support (zstd loading), login error
+reporting and hostile-mob detection, and added an idle hook for the reflex.
+The original README follows.
+
+---
+
 # luantibot
 
 A Mineflayer-style bot library for **Luanti** (formerly Minetest) servers.

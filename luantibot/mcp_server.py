@@ -42,6 +42,8 @@ class BotSession:
 
     def __init__(self):
         self.bot = None
+        # optional fn(bot) run between jobs, e.g. a self-defence reflex
+        self.idle_hook = None
         self.jobs = queue.Queue()
         self.lock = threading.Lock()
         self.thread = threading.Thread(target=self._run, daemon=True,
@@ -57,6 +59,8 @@ class BotSession:
                 if bot is not None:
                     try:
                         bot.step()
+                        if self.idle_hook is not None:
+                            self.idle_hook(bot)
                     except Exception:
                         pass            # a dead link is reported by the next call
                 continue
